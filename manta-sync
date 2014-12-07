@@ -102,6 +102,12 @@ var OPTIONS_PARSER = dashdash.createParser({
       help: 'don\'t send local files, just delete extra remote files'
     },
     {
+      names: [ 'remove-source-files' ],
+      type: 'bool',
+      default: false,
+      help: 'delete local files after uploading'
+    },
+    {
       names: [ 'md5', 'm' ],
       type: 'bool',
       default: false,
@@ -390,6 +396,7 @@ function putfile(d, cb) {
         console.log('%s... uploaded (%d/%d)',
           d.mantafile, processed, filestoput.length);
         filesput++;
+        localfilestodelete.push(d);
         bytesput += d.stat.size;
       }
       cb();
@@ -403,6 +410,8 @@ putqueue.drain = function() {
       filesput, bytesput, filesnotput, (Date.now() - putsstarted) || 0);
   if (opts.delete)
     dodelete();
+  else if (opts.remove_source_files)
+    dodeletesource();
   else
     done();
 };
@@ -469,10 +478,57 @@ function deletefile(d, cb) {
 }
 
 deletequeue.drain = function() {
+  processed = 0;
   console.log('\n%d files deleted successfully, %d files failed to delete (took %dms)',
       filesdeleted, filesnotdeleted, (Date.now() - deletesstarted) || 0);
-  done();
+  if (opts.remove_source_files) {
+    dodeletesource();
+  } else {
+    done();
+  }
 };
+
+var deletesourcequeue = vasync.queue(deletesourcefile, opts.parallel);
+var sfilesdeleted = 0;
+var sfilesnotdeleted = 0;
+var localfilestodelete = [];
+var deletesourcestarted;
+function dodeletesource() {
+  console.log('source file list built, %d files found\n', localfilestodelete.length);
+  if (!localfilestodelete.length)
+    return done();
+  deletesourcequeue.push(localfilestodelete, function() {});
+  deletesourcestarted = Date.now();
+}
+
+function deletesourcefile(d, cb) {
+  cb = nexttick(cb);
+  if (opts.dry_run) {
+    console.log('%s... deleted source file (dryrun)', d.file);
+    return cb();
+  }
+  fs.unlink(d.file, function(err) {
+    processed++;
+    if (err) {
+      var s = util.format('%s... error deleting source file: %s (%d/%d)',
+        d.file, err.code, processed, localfilestodelete.length);
+      console.error(s);
+      errors.push(s);
+      sfilesnotdeleted++;
+    } else {
+      console.log('%s... deleted source file (%d/%d)',
+        d.file, processed, localfilestodelete.length);
+      sfilesdeleted++;
+    }
+    cb();
+  })
+}
+
+deletesourcequeue.drain = function() {
+  console.log('\n%d source files deleted successfully, %d files failed to delete (took %dms)',
+      sfilesdeleted, sfilesnotdeleted, (Date.now() - deletesourcestarted) || 0);
+  done();
+}
 
 // 5. Done
 function done() {
