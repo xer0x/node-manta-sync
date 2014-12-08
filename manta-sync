@@ -311,6 +311,7 @@ function processfile(d, cb) {
         if (md5 === remotemd5) {
           console.log('%s... md5 same as local file, skipping (%d/%d)',
             d.mantafile, processed, localfiles.length);
+          localfilestodelete.push(d);
         } else {
           console.log('%s... md5 is different, adding to put list (%d/%d)',
             d.mantafile, processed, localfiles.length);
@@ -326,10 +327,11 @@ function processfile(d, cb) {
       // https//github.com/joyent/node-manta/issues/136
       if (d.stat.size === +info.size) {
         console.log('%s... size same as local file, skipping (%d/%d)',
-            d.mantafile, processed, localfiles.length);
+          d.mantafile, processed, localfiles.length);
+        localfilestodelete.push(d);
       } else {
         console.log('%s... size is different, adding to put list (%d/%d)',
-            d.mantafile, processed, localfiles.length);
+          d.mantafile, processed, localfiles.length);
         filestoput.push(d);
       }
       cb();
