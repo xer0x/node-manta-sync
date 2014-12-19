@@ -326,9 +326,14 @@ function processfile(d, cb) {
       // XXX +info.size is a hack
       // https//github.com/joyent/node-manta/issues/136
       if (d.stat.size === +info.size) {
-        console.log('%s... size same as local file, skipping (%d/%d)',
-          d.mantafile, processed, localfiles.length);
-        localfilestodelete.push(d);
+        if (opts.remove_source_files) {
+          localfilestodelete.push(d);
+          console.log('%s... size same as local file, skipping (%d/%d), deleting (%d)',
+            d.mantafile, processed, localfiles.length, localfilestodelete.length);
+        } else {
+          console.log('%s... size same as local file, skipping (%d/%d)',
+            d.mantafile, processed, localfiles.length);
+        }
       } else {
         console.log('%s... size is different, adding to put list (%d/%d)',
           d.mantafile, processed, localfiles.length);
@@ -347,6 +352,8 @@ infoqueue.drain = function() {
   if (!filestoput.length) {
     if (opts.delete)
       dodelete();
+    else if (opts.remove_source_files)
+      dodeletesource();
     else
       done();
     return;
